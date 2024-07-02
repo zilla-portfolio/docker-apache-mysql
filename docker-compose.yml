@@ -1,0 +1,108 @@
+# Version of the Docker Compose. In this case, I'm using the third version.
+version: "3"
+
+# Creating a Docker Volume to persists MySQL database
+volumes:
+  database-vol:
+
+# Here we start to describe the configuration of the services we're gonna use.
+# YML files MUST follow the correct indentation, otherwise the YML file won't work
+# The services: will have its own container to run according to their service
+# For example, if I want an Apache Server with a MySQL database, I will need to
+# set TWO services. One container for the Apache server and another container
+# for the MySQL database as follow:
+services:
+
+  # First service wich will run our Apache Server. "my-frontend" can be anything. It will help you to
+  # localize the service through the Terminal and through the Application files
+  my-frontend:
+
+    # Here we are giving the Container a name. It allows you to localize the Container from
+    # the Docker CLI commands making it easier to configure your Container.
+    container_name: frontend-container
+
+    # Now we are going to set up the Image we want to use for this Container.
+    # In this case, we are going to use php:8.0-apache described with some other
+    # configurations in the .docker/apache/Dockerfile
+    build:
+      # The "context:" argument tells docker where to find the Dockerfile build instructions. In this DEV case,
+      # we are using the relative path "./". If we are going to deploy the Application to a production server
+      # we can change the context to a repository (Docker Hub, GitHub) or something like that.
+      context: ./
+      # Here is our Dockerfile from the context path above with some more informations to custom our Build Image
+      dockerfile: ./.docker/apache/Dockerfile
+    
+    # With volumes: we are telling our Docker Compose file to understand that Apache's 
+    # public folder (/var/www/html) will be pointed to our relative path (./web) where
+    # the Application files are in. Plus, we gave READ/WRITE permissions (:rw) to this folder.
+    volumes:
+      - ./web:/var/www/html:rw
+
+    # Now we defined the PORTS where the container can be accessed and so to the external ports too. 
+    # The schema below meand [HOST_PORT]:[CONTAINER_PORT]. The ports can be the same, or for security
+    # reasons you can define a different port for the internal container communication, usually
+    # for Production Deploy
+    ports:
+      - 80:80
+
+    # As we have two services in this Docker Compose File and they are co-related
+    # I need to tell Docker that this service (my-frontend) depends on another service, before
+    # start. In this case, we need our Database Service running before run the Front End service.
+    depends_on:
+      - my-database
+    
+    # Docker internal network for security reasons inside our Docker for containers communication
+    networks:
+      - my-network
+
+  # Second service wich will run our MySQL Server. "my-database" can be anything. It will help you to
+  # localize the service through the Terminal and through the Application files
+  my-database:
+
+    # Here we are giving the Container a name. It allows you to localize the Container from
+    # the Docker CLI commands making it easier to configure your Container.
+    container_name: database-container
+
+    # The "context:" argument tells docker where to find the Dockerfile build instructions. In this DEV case,
+    # we are using the relative path "./". If we are going to deploy the Application to a production server
+    # we can change the context to a repository (Docker Hub, GitHub) or something like that.
+    build:
+
+      # The "context:" argument tells docker where to find the Dockerfile build instructions. In this DEV case,
+      # we are using the relative path "./". If we are going to deploy the Application to a production server
+      # we can change the context to a repository (Docker Hub, GitHub) or something like that.
+      context: ./
+
+      # Here is our Dockerfile from the context path above with some more informations to custom our Build Image
+      dockerfile: ./.docker/mysql/Dockerfile
+
+    # As a DEV environment to use locally, we can set the password as HardCoded to make our life easier.
+    # But WE MUST set the Password and any another sensitive informations into a .env file for security reasons
+    # in the case of a Production server deployment. For our DEV environment, our MySQL password is gonna be rootpwd
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpwd
+
+    # To persist the data even if we shut down de server, we are setting a Docker Volume for the
+    # directory where the MySQL writes its data files (/var/lib/mysql).
+    # Also, we are setting the .SQL script from our relative path (./.docker/mysql/initdb/init.sql)
+    # to Docker MySQL entrypoint wich is gonna read and apply our .SQL commands to build our Database and Table.
+    volumes:
+      - database-vol:/var/lib/mysql
+      - ./.docker/mysql/initdb/init.sql:/docker-entrypoint-initdb.d/init.sql
+    
+    # Now we defined the PORTS where the container can be accessed and so to the external ports too. 
+    # The schema below meand [HOST_PORT]:[CONTAINER_PORT]. The ports can be the same, or for security
+    # reasons you can define a different port for the internal container communication, usually
+    # for Production Deploy
+    ports:
+      - 3306:3306
+    
+    # Docker internal network for security reasons inside our Docker for containers communication
+    networks:
+      - my-network
+
+# Here we create a network using the Docker Bridge Driver to connect the different services
+# (Apache and MySQL) at the same network.
+networks:
+  my-network:
+    driver: bridge
